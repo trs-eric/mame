@@ -165,6 +165,8 @@ project "mame_srcdbg_static"
 
 	addprojectflags()
 
+	targetdir(MAME_DIR)
+
 	defines { 
 		"SRCDBG_LIB_MAJOR=" .. srcdbg_lib_major,
 		"SRCDBG_LIB_MINOR=" .. srcdbg_lib_minor,
@@ -206,6 +208,8 @@ project "mame_srcdbg_static"
 	kind ("SharedLib")
 
 	addprojectflags()
+
+	targetdir(MAME_DIR)
 
 	links {
 		"mame_srcdbg_static",
