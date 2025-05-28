@@ -799,7 +799,7 @@ const m6x09_base_disassembler::opcodeinfo m6x09_disassembler::m6x09_opcodes[] =
 	{ 0x113B, 1, "TFM",   IMM_TFM,  HD6309_EXCLUSIVE },
 	{ 0x113C, 1, "BITMD", IMM,      HD6309_EXCLUSIVE },
 	{ 0x113D, 1, "LDMD",  IMM,      HD6309_EXCLUSIVE },
-	{ 0x113E, 0, "XFIRQ", INH,      M6809_UNDOCUMENTED },
+    { 0x113E, 0, "Break", INH,      M6x09_GENERAL },
 	{ 0x113F, 0, "SWI3",  INH,      M6x09_GENERAL },
 
 	{ 0x1143, 0, "COME",  INH,  HD6309_EXCLUSIVE },
