@@ -52,6 +52,7 @@ function osdmodulesbuild()
 	files {
 		MAME_DIR .. "src/osd/watchdog.cpp",
 		MAME_DIR .. "src/osd/watchdog.h",
+		MAME_DIR .. "src/osd/interface/audio.cpp",
 		MAME_DIR .. "src/osd/interface/audio.h",
 		MAME_DIR .. "src/osd/interface/inputcode.h",
 		MAME_DIR .. "src/osd/interface/inputdev.h",
@@ -130,8 +131,9 @@ function osdmodulesbuild()
 		MAME_DIR .. "src/osd/modules/render/drawsdl.cpp",
 		MAME_DIR .. "src/osd/modules/render/render_module.h",
 		MAME_DIR .. "src/osd/modules/sound/coreaudio_sound.cpp",
-		MAME_DIR .. "src/osd/modules/sound/direct_sound.cpp",
 		MAME_DIR .. "src/osd/modules/sound/js_sound.cpp",
+		MAME_DIR .. "src/osd/modules/sound/mmdevice_helpers.cpp",
+		MAME_DIR .. "src/osd/modules/sound/mmdevice_helpers.h",
 		MAME_DIR .. "src/osd/modules/sound/none.cpp",
 		MAME_DIR .. "src/osd/modules/sound/pa_sound.cpp",
 		MAME_DIR .. "src/osd/modules/sound/pulse_sound.cpp",
@@ -139,6 +141,7 @@ function osdmodulesbuild()
 		MAME_DIR .. "src/osd/modules/sound/sdl_sound.cpp",
 		MAME_DIR .. "src/osd/modules/sound/sound_module.cpp",
 		MAME_DIR .. "src/osd/modules/sound/sound_module.h",
+		MAME_DIR .. "src/osd/modules/sound/wasapi_sound.cpp",
 		MAME_DIR .. "src/osd/modules/sound/xaudio2_sound.cpp",
 	}
 	includedirs {

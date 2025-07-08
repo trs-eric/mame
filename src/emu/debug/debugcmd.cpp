@@ -18,6 +18,8 @@
 #include "debugvw.h"
 #include "express.h"
 #include "points.h"
+// #include "srcdbg_provider.h"
+#include "srcdbg_info.h"
 
 #include "debugger.h"
 #include "emuopts.h"
@@ -193,9 +195,14 @@ debugger_commands::debugger_commands(running_machine& machine, debugger_cpu& cpu
 	m_console.register_command("do",        CMDFLAG_NONE, 1, 1, std::bind(&debugger_commands::execute_do, this, _1));
 	m_console.register_command("step",      CMDFLAG_NONE, 0, 1, std::bind(&debugger_commands::execute_step, this, _1));
 	m_console.register_command("s",         CMDFLAG_NONE, 0, 1, std::bind(&debugger_commands::execute_step, this, _1));
+	m_console.register_command("steps",     CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_step_source, this, _1));
+	m_console.register_command("sts",       CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_step_source, this, _1));
 	m_console.register_command("over",      CMDFLAG_NONE, 0, 1, std::bind(&debugger_commands::execute_over, this, _1));
 	m_console.register_command("o",         CMDFLAG_NONE, 0, 1, std::bind(&debugger_commands::execute_over, this, _1));
+	m_console.register_command("overs",     CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_over_source, this, _1));
+	m_console.register_command("os",        CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_over_source, this, _1));
 	m_console.register_command("out" ,      CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_out, this, _1));
+	m_console.register_command("outs" ,     CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_out_source, this, _1));
 	m_console.register_command("go",        CMDFLAG_NONE, 0, 1, std::bind(&debugger_commands::execute_go, this, _1));
 	m_console.register_command("g",         CMDFLAG_NONE, 0, 1, std::bind(&debugger_commands::execute_go, this, _1));
 	m_console.register_command("gvblank",   CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_go_vblank, this, _1));
@@ -219,6 +226,10 @@ debugger_commands::debugger_commands(running_machine& machine, debugger_cpu& cpu
 	m_console.register_command("resume",    CMDFLAG_NONE, 0, MAX_COMMAND_PARAMS, std::bind(&debugger_commands::execute_resume, this, _1));
 	m_console.register_command("cpulist",   CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_cpulist, this, _1));
 	m_console.register_command("time",      CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_time, this, _1));
+	m_console.register_command("sdoffset",  CMDFLAG_NONE, 1, 1, std::bind(&debugger_commands::execute_srcdbg_set_offset, this, _1));
+	m_console.register_command("sdlist",    CMDFLAG_NONE, 0, 0, std::bind(&debugger_commands::execute_srcdbg_provider_list, this, _1));
+	m_console.register_command("sdenable",  CMDFLAG_NONE, 1, 1, std::bind(&debugger_commands::execute_srcdbg_provider_disenable, this, true, _1));
+	m_console.register_command("sddisable", CMDFLAG_NONE, 1, 1, std::bind(&debugger_commands::execute_srcdbg_provider_disenable, this, false, _1));
 
 	m_console.register_command("comadd",    CMDFLAG_NONE, 1, 2, std::bind(&debugger_commands::execute_comment_add, this, _1));
 	m_console.register_command("//",        CMDFLAG_NONE, 1, 2, std::bind(&debugger_commands::execute_comment_add, this, _1));
@@ -452,13 +463,13 @@ void debugger_commands::execute_help(const std::vector<std::string_view> &params
 
 void debugger_commands::execute_print(const std::vector<std::string_view> &params)
 {
-	/* validate the other parameters */
+	// validate the other parameters
 	u64 values[MAX_COMMAND_PARAMS];
 	for (int i = 0; i < params.size(); i++)
 		if (!m_console.validate_number_parameter(params[i], values[i]))
 			return;
 
-	/* then print each one */
+	// then print each one
 	for (int i = 0; i < params.size(); i++)
 		m_console.printf("%X", values[i]);
 	m_console.printf("\n");
@@ -680,7 +691,7 @@ void debugger_commands::execute_index_command(std::vector<std::string_view> cons
 
 void debugger_commands::execute_printf(const std::vector<std::string_view> &params)
 {
-	/* then do a printf */
+	// then do a printf
 	std::ostringstream buffer;
 	if (mini_printf(buffer, params))
 		m_console.printf("%s\n", std::move(buffer).str());
@@ -693,7 +704,7 @@ void debugger_commands::execute_printf(const std::vector<std::string_view> &para
 
 void debugger_commands::execute_logerror(const std::vector<std::string_view> &params)
 {
-	/* then do a printf */
+	// then do a printf
 	std::ostringstream buffer;
 	if (mini_printf(buffer, params))
 		m_machine.logerror("%s", std::move(buffer).str());
@@ -706,7 +717,7 @@ void debugger_commands::execute_logerror(const std::vector<std::string_view> &pa
 
 void debugger_commands::execute_tracelog(const std::vector<std::string_view> &params)
 {
-	/* then do a printf */
+	// then do a printf
 	std::ostringstream buffer;
 	if (mini_printf(buffer, params))
 		m_console.get_visible_cpu()->debug()->trace_printf("%s", std::move(buffer).str());
@@ -789,12 +800,22 @@ void debugger_commands::execute_do(const std::vector<std::string_view> &params)
 
 void debugger_commands::execute_step(const std::vector<std::string_view> &params)
 {
-	/* if we have a parameter, use it */
+	// if we have a parameter, use it
 	u64 steps = 1;
 	if (params.size() > 0 && !m_console.validate_number_parameter(params[0], steps))
 		return;
 
 	m_console.get_visible_cpu()->debug()->single_step(steps);
+}
+
+
+/*-----------------------------------------------------
+    execute_step_source - execute the step src command
+-----------------------------------------------------*/
+
+void debugger_commands::execute_step_source(const std::vector<std::string_view> &params)
+{
+	m_console.get_visible_cpu()->debug()->single_step(1 /* steps */, true /* source-level stepping */);
 }
 
 
@@ -804,12 +825,22 @@ void debugger_commands::execute_step(const std::vector<std::string_view> &params
 
 void debugger_commands::execute_over(const std::vector<std::string_view> &params)
 {
-	/* if we have a parameter, use it */
+	// if we have a parameter, use it
 	u64 steps = 1;
 	if (params.size() > 0 && !m_console.validate_number_parameter(params[0], steps))
 		return;
 
 	m_console.get_visible_cpu()->debug()->single_step_over(steps);
+}
+
+
+/*-----------------------------------------------------
+    execute_over_source - execute the over src command
+-----------------------------------------------------*/
+
+void debugger_commands::execute_over_source(const std::vector<std::string_view> &params)
+{
+	m_console.get_visible_cpu()->debug()->single_step_over(1 /* steps */, true /* source-level stepping */);
 }
 
 
@@ -824,6 +855,16 @@ void debugger_commands::execute_out(const std::vector<std::string_view> &params)
 
 
 /*-------------------------------------------------
+    execute_out_source - execute the out src command
+-------------------------------------------------*/
+
+void debugger_commands::execute_out_source(const std::vector<std::string_view> &params)
+{
+	m_console.get_visible_cpu()->debug()->single_step_out(true /* source-level stepping */);
+}
+
+
+/*-------------------------------------------------
     execute_go - execute the go command
 -------------------------------------------------*/
 
@@ -831,7 +872,7 @@ void debugger_commands::execute_go(const std::vector<std::string_view> &params)
 {
 	u64 addr = ~0;
 
-	/* if we have a parameter, use it instead */
+	// if we have a parameter, use it instead
 	if (params.size() > 0 && !m_console.validate_number_parameter(params[0], addr))
 		return;
 
@@ -858,7 +899,7 @@ void debugger_commands::execute_go_interrupt(const std::vector<std::string_view>
 {
 	u64 irqline = -1;
 
-	/* if we have a parameter, use it instead */
+	// if we have a parameter, use it instead
 	if (params.size() > 0 && !m_console.validate_number_parameter(params[0], irqline))
 		return;
 
@@ -873,7 +914,7 @@ void debugger_commands::execute_go_exception(const std::vector<std::string_view>
 {
 	u64 exception = -1;
 
-	/* if we have a parameter, use it instead */
+	// if we have a parameter, use it instead
 	if (params.size() > 0 && !m_console.validate_number_parameter(params[0], exception))
 		return;
 
@@ -893,7 +934,7 @@ void debugger_commands::execute_go_time(const std::vector<std::string_view> &par
 {
 	u64 milliseconds = -1;
 
-	/* if we have a parameter, use it instead */
+	// if we have a parameter, use it instead
 	if (params.size() > 0 && !m_console.validate_number_parameter(params[0], milliseconds))
 		return;
 
@@ -1239,6 +1280,80 @@ void debugger_commands::execute_cpulist(const std::vector<std::string_view> &par
 void debugger_commands::execute_time(const std::vector<std::string_view> &params)
 {
 	m_console.printf("%s\n", m_machine.time().as_string());
+}
+
+//-------------------------------------------------
+//  execute_srcdbg_set_offset - execute the
+//  source-level debugging set offset command
+//-------------------------------------------------
+
+void debugger_commands::execute_srcdbg_set_offset(const std::vector<std::string_view> &params)
+{
+	srcdbg_info * srcdbg = m_machine.debugger().get_srcdbg_info();
+	if (srcdbg == nullptr)
+	{
+		m_console.printf("Error : source-level debugging is not enabled\n");
+		return;
+	}
+
+	u64 offset;
+	if (!m_console.validate_number_parameter(params[0], offset))
+		return;
+
+	srcdbg->set_offset(s32(offset));
+	m_console.get_visible_cpu()->debug()->update_symbols_from_srcdbg(*srcdbg);
+	m_console.printf("Offset successfully applied\n");
+}
+
+void debugger_commands::execute_srcdbg_provider_list(const std::vector<std::string_view> &)
+{
+	srcdbg_info * srcdbg = m_machine.debugger().get_srcdbg_info();
+	if (srcdbg == nullptr)
+	{
+		m_console.printf("Error : source-level debugging is not enabled\n");
+		return;
+	}
+
+	std::vector<srcdbg_info::srcdbg_provider_entry> & providers = srcdbg->providers();
+	for (offs_t provider_idx = 0; provider_idx < providers.size(); provider_idx++)
+	{
+		srcdbg_info::srcdbg_provider_entry & sp = providers[provider_idx];
+		m_console.printf("%c%4X : %s\n", sp.enabled() ? ' ' : 'D', provider_idx, sp.name());
+	}
+}
+
+void debugger_commands::execute_srcdbg_provider_disenable(bool enable, const std::vector<std::string_view> &params)
+{
+	srcdbg_info * srcdbg = m_machine.debugger().get_srcdbg_info();
+	if (srcdbg == nullptr)
+	{
+		m_console.printf("Error : source-level debugging is not enabled\n");
+		return;
+	}
+
+	u64 index;
+	if (!m_console.validate_number_parameter(params[0], index))
+		return;
+
+	std::vector<srcdbg_info::srcdbg_provider_entry> & providers = srcdbg->providers();
+	if (index >= providers.size())
+	{
+		m_console.printf("Invalid source-debugging info number: %X\n", index);
+		m_console.printf("Run sdlist for a list of valid source-debugging info numbers.\n");
+		return;
+	}
+
+	srcdbg_info::srcdbg_provider_entry & sp = providers[index];
+	if (sp.enabled() == enable)
+	{
+		m_console.printf("Source-debugging info %X is already %s\n", index, enable ? "enabled" : "disabled");
+		return;
+	}
+
+	sp.set_enabled(enable);
+	m_console.printf("Source-debugging info %X is now %s\n", index, enable ? "enabled" : "disabled");
+	srcdbg->coalesce();
+	m_machine.debug_view().update_all(DVT_SOURCE);
 }
 
 /*-------------------------------------------------
@@ -2119,7 +2234,7 @@ void debugger_commands::execute_saveregion(const std::vector<std::string_view> &
 	if ((length <= 0) || ((length + offset) >= region->bytes()))
 		length = region->bytes() - offset;
 
-	/* open the file */
+	// open the file
 	std::string const filename(params[0]);
 	FILE *f = fopen(filename.c_str(), "wb");
 	if (!f)
@@ -3434,7 +3549,7 @@ void debugger_commands::execute_dasm(const std::vector<std::string_view> &params
 		offset = next_offset;
 	}
 
-	/* write the data */
+	// write the data
 	std::string fname(params[0]);
 	std::ofstream f(fname);
 	if (!f.good())
@@ -3749,14 +3864,14 @@ void debugger_commands::execute_pcatmem(int spacenum, const std::vector<std::str
 
 void debugger_commands::execute_snap(const std::vector<std::string_view> &params)
 {
-	/* if no params, use the default behavior */
+	// if no params, use the default behavior
 	if (params.empty())
 	{
 		m_machine.video().save_active_screen_snapshots();
 		m_console.printf("Saved snapshot\n");
 	}
 
-	/* otherwise, we have to open the file ourselves */
+	// otherwise, we have to open the file ourselves
 	else
 	{
 		u64 scrnum = 0;
@@ -3909,16 +4024,16 @@ void debugger_commands::execute_memdump(const std::vector<std::string_view> &par
 
 void debugger_commands::execute_symlist(const std::vector<std::string_view> &params)
 {
-	// Default to CPU "0" if none specified
-	const char * cpuname = (params.empty()) ? "0" : params[0].cbegin();
 	device_t *cpu = nullptr;
 	symbol_table *symtable;
-	if (!m_console.validate_cpu_parameter(cpuname, cpu))
+
+	// default to CPU "0" if none specified
+	if (!m_console.validate_cpu_parameter(params.empty() ? "0" : params[0], cpu))
 	{
 		if (!params.empty())
-			return;     // Explicitly specified cpu is invalid
+			return; // explicitly specified CPU is invalid
 
-		// Somehow cpu "0" is invalid, so just stick with global symbol table
+		// somehow CPU "0" is invalid, so just stick with global symbol table
 		symtable = &m_machine.debugger().cpu().global_symtable();
 	}
 	else
@@ -3926,10 +4041,13 @@ void debugger_commands::execute_symlist(const std::vector<std::string_view> &par
 		symtable = &cpu->debug()->symtable();
 	}
 
-	// Traverse symbol_table parent chain, printing each table's symbols in its own block
+	// unknown tag if CPU is invalid
+	const char *cpu_tag = cpu ? cpu->tag() : ":?";
+
+	// traverse symbol_table parent chain, printing each table's symbols in its own block
 	for (; symtable != nullptr; symtable = symtable->parent())
 	{
-		// Skip globals if user explicitly requested CPU
+		// skip globals if user explicitly requested CPU
 		if (symtable->type() == symbol_table::BUILTIN_GLOBALS && !params.empty())
 			continue;
 
@@ -3938,17 +4056,23 @@ void debugger_commands::execute_symlist(const std::vector<std::string_view> &par
 
 		std::vector<const char *> namelist;
 
-		// Print heading for table
+		// print heading for table
 		switch (symtable->type())
 		{
 		case symbol_table::CPU_STATE:
-			m_console.printf("\n**** CPU '%s' symbols ****\n", cpu->tag());
+			m_console.printf("\n**** CPU '%s' symbols ****\n", cpu_tag);
 			break;
 		case symbol_table::BUILTIN_GLOBALS:
 			m_console.printf("\n**** Global symbols ****\n");
 			break;
+		case symbol_table::SRCDBG_LOCALS:
+			m_console.printf("\n**** Source-level local variables ****\n");
+			break;
+		case symbol_table::SRCDBG_GLOBALS:
+			m_console.printf("\n**** Source-level global variables ****\n");
+			break;
 		default:
-			assert (!"Unrecognized symbol table type");
+			assert(!"Unrecognized symbol table type");
 		}
 
 		// gather names for all relevant symbols
@@ -3972,7 +4096,10 @@ void debugger_commands::execute_symlist(const std::vector<std::string_view> &par
 		{
 			symbol_entry const *const entry = symtable->find(symname);
 			assert(entry != nullptr);
-			m_console.printf("%s = %X", symname, entry->value());
+			if (entry->is_in_scope())
+				m_console.printf("%s = %X", symname, entry->value());
+			else
+				m_console.printf("%s (not currently in scope)", symname);
 			if (!entry->is_lval())
 				m_console.printf("  (read-only)");
 			m_console.printf("\n");

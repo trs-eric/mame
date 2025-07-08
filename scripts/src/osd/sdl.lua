@@ -214,12 +214,7 @@ end
 
 BASE_TARGETOS       = "unix"
 SDLOS_TARGETOS      = "unix"
-if _OPTIONS["targetos"]=="linux" then
-elseif _OPTIONS["targetos"]=="openbsd" then
-elseif _OPTIONS["targetos"]=="netbsd" then
-elseif _OPTIONS["targetos"]=="haiku" then
-elseif _OPTIONS["targetos"]=="asmjs" then
-elseif _OPTIONS["targetos"]=="windows" then
+if _OPTIONS["targetos"]=="windows" then
 	BASE_TARGETOS       = "win32"
 	SDLOS_TARGETOS      = "win32"
 elseif _OPTIONS["targetos"]=="macosx" then
@@ -372,6 +367,8 @@ project ("osd_" .. _OPTIONS["osd"])
 			MAME_DIR .. "src/osd/modules/debugger/osx/registerpointsview.h",
 			MAME_DIR .. "src/osd/modules/debugger/osx/registersview.mm",
 			MAME_DIR .. "src/osd/modules/debugger/osx/registersview.h",
+			MAME_DIR .. "src/osd/modules/debugger/osx/srcdebugview.mm",
+			MAME_DIR .. "src/osd/modules/debugger/osx/srcdebugview.h",
 			MAME_DIR .. "src/osd/modules/debugger/osx/watchpointsview.mm",
 			MAME_DIR .. "src/osd/modules/debugger/osx/watchpointsview.h",
 			MAME_DIR .. "src/osd/modules/debugger/osx/debugosx.h",
